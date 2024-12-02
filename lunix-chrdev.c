@@ -48,10 +48,15 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 	struct lunix_sensor_struct *sensor;
 	
 	WARN_ON ( !(sensor = state->sensor));
-	/* ? */
+	/*---------------------------------------------------------------------------*/
 
-	/* The following return is bogus, just for the stub to compile */
-	return 0; /* ? */
+    /* Compare the cached timestamp with the sensor's last update */
+    if (sensor->msr_data[state->type]->last_update > state->buf_timestamp) {
+        return 1; // Refresh needed
+    }
+    return 0; // No refresh needed
+	
+	/*---------------------------------------------------------------------------*/
 }
 
 /*
@@ -62,27 +67,86 @@ static int lunix_chrdev_state_needs_refresh(struct lunix_chrdev_state_struct *st
 static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 {
 	struct lunix_sensor_struct __attribute__((unused)) *sensor;
-	
-	debug("leaving\n");
+	/*---------------------------------------------------------------------------*/
+
+	struct lunix_msr_data_struct *msr_data;
+	unsigned long flags; /* For spinlock */
+    uint32_t raw_value, last_update;
+    char formatted_data[LUNIX_CHRDEV_BUFSZ]; /* Buffer for formatted data */
+    int formatted_len;
+    long converted_value;
+    long *lookup[N_LUNIX_MSR] = {lookup_voltage, lookup_temperature, lookup_light};
+
+	/*---------------------------------------------------------------------------*/
+
+	debug("entering\n"); /* Changed it to "entering" because it made a lot more sense */
 
 	/*
 	 * Grab the raw data quickly, hold the
 	 * spinlock for as little as possible.
 	 */
-	/* ? */
-	/* Why use spinlocks? See LDD3, p. 119 */
+	/*---------------------------------------------------------------------------*/
+
+    /* Validate the sensor */
+    sensor = state->sensor;
+    WARN_ON(!(sensor = state->sensor));
+
+	 /* Acquire the spinlock to safely access shared sensor data */
+    spin_lock_irqsave(&sensor->lock, flags);
+
+    /* Fetch the raw data */
+    msr_data = sensor->msr_data[state->type];
+	last_update = msr_data->last_update;
+	raw_value = msr_data->values[0];
+
+	/* Unlock */
+    spin_unlock_irqrestore(&sensor->lock, flags);
+	/*---------------------------------------------------------------------------*/
+
+	/*
+	 TODO: Why use spinlocks? See LDD3, p. 119
+	*/
 
 	/*
 	 * Any new data available?
 	 */
-	/* ? */
+	/*---------------------------------------------------------------------------*/
+	
+	/* Check if the state needs a refresh */
+    if (!lunix_chrdev_state_needs_refresh(state)) {
+		debug("No new data available...\n");
+        return -EAGAIN;
+    }
+
+	/*---------------------------------------------------------------------------*/
+
 
 	/*
 	 * Now we can take our time to format them,
 	 * holding only the private state semaphore
 	 */
 
-	/* ? */
+	/*---------------------------------------------------------------------------*/
+
+	/* Update buffer timestamp */
+    state->buf_timestamp = last_update;
+
+    /* Convert and format data */
+    converted_value = lookup[state->type][raw_value];
+    formatted_len = snprintf(formatted_data, LUNIX_CHRDEV_BUFSZ, "%ld.%03ld\n",
+                             converted_value / 1000, converted_value % 1000);
+
+    /* Check for buffer overflow */
+    if (formatted_len >= LUNIX_CHRDEV_BUFSZ) {
+        return -EOVERFLOW;
+    }
+
+    /* Update the state buffer */
+    memcpy(state->buf_data, formatted_data, formatted_len);
+    state->buf_lim = formatted_len;
+	
+	/*---------------------------------------------------------------------------*/
+
 
 	debug("leaving\n");
 	return 0;

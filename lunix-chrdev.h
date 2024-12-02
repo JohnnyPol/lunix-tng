@@ -43,6 +43,7 @@ struct lunix_chrdev_state_struct {
 	/*
 	 * Fixme: Any mode settings? e.g. blocking vs. non-blocking
 	 */
+	int mode; /* Blocking (1) or non-blocking (0) mode *
 };
 
 /*
