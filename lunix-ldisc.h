@@ -1,5 +1,5 @@
 /*
- * lunix-chrdev.h
+ * lunix-ldisc.h
  *
  * Definition file for the
  * Lunix:TNG TTY line discipline

@@ -4,7 +4,8 @@
  * Implementation of character devices
  * for Lunix:TNG
  *
- * < Your name here >
+ * Ioannis Polychronopoulos <el21089@mail.ntua.gr>
+ * Kostas Stavliotis <>
  *
  */
 
