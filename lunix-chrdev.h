@@ -43,12 +43,11 @@ struct lunix_chrdev_state_struct {
 	/*
 	 * Fixme: Any mode settings? e.g. blocking vs. non-blocking
 	 */
-	int mode; /* Blocking (1) or non-blocking (0) mode *
+	int mode; /* Blocking (1) or non-blocking (0) mode */
 };
 
-/*
- * Function prototypes
- */
+/* Function prototypes */
+
 int lunix_chrdev_init(void);
 void lunix_chrdev_destroy(void);
 
