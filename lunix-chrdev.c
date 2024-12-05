@@ -5,7 +5,7 @@
  * for Lunix:TNG
  *
  * Ioannis Polychronopoulos <el21089@mail.ntua.gr>
- * Kostas Stavliotis <>
+ * Kostas Stavliotis <el21104@mail.ntua.gr>
  *
  */
 
@@ -80,7 +80,7 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
     long *lookup[N_LUNIX_MSR] = {lookup_voltage, lookup_temperature, lookup_light};
 
 	/*---------------------------------------------------------------------------*/
-
+	/* output text to the kernel log buffer for debugging purposes */
 	debug("entering\n"); /* Changed it to "entering" because it made a lot more sense */
 
 	/*
@@ -108,6 +108,7 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	/*
 	 TODO: Why use spinlocks? See LDD3, p. 119
 	 * Answer:  spinlocks protect sensor->msr_data because multiple threads or interrupts may access and modify the sensor data concurrently. 
+	 * We use irqsave to disable interrupts to prevent deadlocks and we save the interrupt state to the "flags" variable.
 	*/
 
 	/*
@@ -137,13 +138,13 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
     /* Convert and format data */
     converted_value = lookup[state->type][raw_value]; // Using the lookup table
 
-	/* The converted value is in the form XXYYY while we want XX.YYY. For XX we get it from /1000 and the YYY from %1000 */
+	/* The converted value is in the form XXYYY while we want XX.YYY. For XX we get it from /1000 (int division) and the YYY from %1000 */
     formatted_len = snprintf(formatted_data, LUNIX_CHRDEV_BUFSZ, "%ld.%03ld\n",
                              converted_value / 1000, converted_value % 1000); 
 
     /* Check for buffer overflow */
     if (formatted_len >= LUNIX_CHRDEV_BUFSZ) {
-        return -EOVERFLOW;
+        return -EOVERFLOW; // An error code defined in Linux kernel headers, representing Value Too Large for Defined Data Type.
     }
 
     /* Update the state buffer */
@@ -170,7 +171,7 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
     struct lunix_chrdev_state_struct *p_state;
 
 	debug("entering\n");
-	ret = -ENODEV;
+	ret = -ENODEV; // Means "No such device."
 	if ((ret = nonseekable_open(inode, filp)) < 0)
 		goto out;
 
@@ -201,8 +202,8 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
     }
 
     p_state->type = sensor_type;
-    p_state->sensor = &lunix_sensors[sensor_nb]; // ! see the structure of a state
-    p_state->buf_timestamp = 0; // !  why 0
+    p_state->sensor = &lunix_sensors[sensor_nb]; 
+    p_state->buf_timestamp = 0; // Just updated
 	/* This clears any residual data and ensures the buffer starts empty.*/
     memset(p_state->buf_data, 0, LUNIX_CHRDEV_BUFSZ); // memset initializes the buf_data buffer to zeros.
     p_state->buf_lim = 0;
@@ -217,7 +218,7 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
     filp->private_data = p_state; 
 
     ret = 0;
-    debug("State of type %d and sensor %d successfully associated\n", sensor_type, sensor_nb); // ! where do the debug messages output the text?
+    debug("State of type %d and sensor %d successfully associated\n", sensor_type, sensor_nb); 
 
 
 	/*---------------------------------------------------------------------------*/
@@ -262,7 +263,9 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 
 	
 	/*---------------------------OUR CODE----------------------------------------*/
-	if (down_interruptible(&state->lock)) { // ! what is down_interruptible
+	
+	/* down_interruptible acquires the semaphore state->lock, but allows the process to be interrupted by a signal. */
+	if (down_interruptible(&state->lock)) {
         return -ERESTARTSYS;
     }
 	
@@ -272,12 +275,13 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	 * on a "fresh" measurement, do so
 	 */
 	if (*f_pos == 0) {
+		/* If no refresh is needed: Meaning no new data...*/
 		while (lunix_chrdev_state_update(state) == -EAGAIN) {
 			/* The process needs to sleep 
 			TODO: See LDD3, page 153 for a hint 
 			*/
-			up(&state->lock); // ! why up
-			if (filp->f_flags & O_NONBLOCK) {
+			up(&state->lock); // up releases the semaphore state->lock, allowing other processes to access the protected resource.
+			if (filp->f_flags & O_NONBLOCK) { // ! what is O_NONBLOCK
                 return -EAGAIN;
             }
             debug("\"%s\" reading: going to sleep\n", current->comm); /* Name of the current process */
@@ -313,7 +317,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
         ret = -EFAULT; // ! error
         goto out;
     }
-	debug("We read %zu bytes of data\n", cnt); // ! what is %zu?
+	debug("We read %zu bytes of data\n", cnt);
 
 	/* Update file position */
     *f_pos += cnt;
@@ -324,7 +328,8 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	/* Auto-rewind on EOF mode? */
 	/*---------------------------OUR CODE----------------------------------------*/
 
-    if (*f_pos >= state->buf_lim) { // ! explain
+	/* This ensures the f_pos doesn’t exceed the available data in the buffer. If it does set f_pos to 0 for auto-rewind. */
+    if (*f_pos >= state->buf_lim) { 
         *f_pos = 0;
     }
 
@@ -370,7 +375,7 @@ int lunix_chrdev_init(void)
 
 	/*---------------------------OUR CODE----------------------------------------*/
 	// Register the character device region (allocate major and minor numbers)
-	ret = register_chrdev_region(dev_no, lunix_minor_cnt, "lunix_chrdev"); // ! what does  this function do?
+	ret = register_chrdev_region(dev_no, lunix_minor_cnt, "lunix_chrdev"); 
 	/*---------------------------------------------------------------------------*/
 
 	if (ret < 0) {
@@ -380,7 +385,9 @@ int lunix_chrdev_init(void)
 
 	/* cdev_add */
 	/*---------------------------OUR CODE----------------------------------------*/
-	ret = cdev_add(&lunix_chrdev_cdev, dev_no, lunix_minor_cnt); // ! what does this function do?
+
+	/* Add the character device to the system, associating it with the specified device numbers. */
+	ret = cdev_add(&lunix_chrdev_cdev, dev_no, lunix_minor_cnt); 
 	/*---------------------------------------------------------------------------*/
 	if (ret < 0) {
 		debug("failed to add character device\n");
