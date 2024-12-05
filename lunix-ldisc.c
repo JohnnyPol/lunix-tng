@@ -65,14 +65,14 @@ static void lunix_ldisc_close(struct tty_struct *tty)
  */
 static void lunix_ldisc_receive_buf(struct tty_struct *tty,
                                     const unsigned char *cp,
-                                    const char *fp, int count)
+                                    const unsigned char *fp, size_t count)
 {
 #if LUNIX_DEBUG
 	int i;
 
-	debug("called, %lu characters have been received. Data at *cp: { ", (size_t)count);
-	for (i = 0; i < (size_t)count; i++)
-		printk(KERN_CONT "0x%02x%s", cp[i], (i == (size_t)count - 1) ? "" : ", ");
+	debug("called, %lu characters have been received. Data at *cp: { ", count);
+	for (i = 0; i < count; i++)
+		printk(KERN_CONT "0x%02x%s", cp[i], (i == count - 1) ? "" : ", ");
 	printk(KERN_CONT " }\n");
 #endif
 

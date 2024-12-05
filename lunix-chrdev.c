@@ -91,7 +91,7 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 
     /* Validate the sensor */
     sensor = state->sensor;
-    WARN_ON(!(sensor = state->sensor));
+    WARN_ON(!(sensor = state->sensor)); // ! What does this do?
 
 	 /* Acquire the spinlock to safely access shared sensor data */
     spin_lock_irqsave(&sensor->lock, flags);
@@ -117,7 +117,7 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
 	/* Check if the state needs a refresh */
     if (!lunix_chrdev_state_needs_refresh(state)) {
 		debug("No new data available...\n");
-        return -EAGAIN;
+        return -EAGAIN; // ! what is this?
     }
 
 	/*---------------------------------------------------------------------------*/
@@ -136,7 +136,7 @@ static int lunix_chrdev_state_update(struct lunix_chrdev_state_struct *state)
     /* Convert and format data */
     converted_value = lookup[state->type][raw_value];
     formatted_len = snprintf(formatted_data, LUNIX_CHRDEV_BUFSZ, "%ld.%03ld\n",
-                             converted_value / 1000, converted_value % 1000);
+                             converted_value / 1000, converted_value % 1000); // ! find out what this spits out
 
     /* Check for buffer overflow */
     if (formatted_len >= LUNIX_CHRDEV_BUFSZ) {
@@ -196,7 +196,7 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 
     p_state->type = sensor_type;
     p_state->sensor = &lunix_sensors[sensor_nb];
-    p_state->buf_timestamp = get_seconds(); /* Current Timestamp */
+    p_state->buf_timestamp = 0;
     memset(p_state->buf_data, 0, LUNIX_CHRDEV_BUFSZ);
     p_state->buf_lim = 0;
 
@@ -252,7 +252,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	if (down_interruptible(&state->lock)) {
         return -ERESTARTSYS;
     }
-	/*---------------------------------------------------------------------------*/
+	
 	/*
 	 * If the cached character device state needs to be
 	 * updated by actual sensor data (i.e. we need to report

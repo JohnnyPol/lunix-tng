@@ -1,0 +1,9 @@
+*.o*
+*.ko*
+*.cmd
+lunix-lookup.h
+mk-lunix-lookup
+
+*.symvers
+*.mod*
+lunix-attach
