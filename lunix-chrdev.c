@@ -209,10 +209,15 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
 
 	/* A semaphore is used to synchronize access to the p_state structure. */
     sema_init(&p_state->lock, 1); // 1 means we have mutex Lock
-    filp->private_data = p_state; // filp is a pointer to the open file structure representing the file being accessed.
+
+	/* 
+	 *	The private_data field allows the driver to associate a custom data structure (in this case, p_state) with the open file.
+	 *	filp is a pointer to the open file structure representing the file being accessed.
+	*/
+    filp->private_data = p_state; 
 
     ret = 0;
-    debug("State of type %d and sensor %d successfully associated\n", sensor_type, sensor_nb);
+    debug("State of type %d and sensor %d successfully associated\n", sensor_type, sensor_nb); // ! where do the debug messages output the text?
 
 
 	/*---------------------------------------------------------------------------*/
@@ -228,7 +233,7 @@ static int lunix_chrdev_release(struct inode *inode, struct file *filp)
 	struct lunix_chrdev_state_struct *private_state;
 
     private_state = filp->private_data;
-	// ! kfree and filp private_data?
+	
     /* Clean up any resources associated with private_state if needed */
     kfree(private_state); // Free the allocated private state structure
 
@@ -250,7 +255,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	struct lunix_chrdev_state_struct *state;
 
 	state = filp->private_data;
-	WARN_ON(!(state); // ! what is warn_on
+	WARN_ON(!(state));
 
 	sensor = state->sensor;
 	WARN_ON(!sensor);
