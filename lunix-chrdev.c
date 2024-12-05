@@ -220,7 +220,14 @@ static int lunix_chrdev_open(struct inode *inode, struct file *filp)
     ret = 0;
     debug("State of type %d and sensor %d successfully associated\n", sensor_type, sensor_nb); 
 
-
+	/*
+    // Set the mode (blocking or non-blocking) based on the file open flags 
+    if (filp->f_flags & O_NONBLOCK) {
+        p_state->mode = 0; // Non-blocking mode
+    } else {
+        p_state->mode = 1; // Blocking mode
+    }
+	*/
 	/*---------------------------------------------------------------------------*/
 out:
 	debug("leaving, with ret = %d\n", ret);
@@ -281,12 +288,18 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 			TODO: See LDD3, page 153 for a hint 
 			*/
 			up(&state->lock); // up releases the semaphore state->lock, allowing other processes to access the protected resource.
-			if (filp->f_flags & O_NONBLOCK) { // ! what is O_NONBLOCK
+			if (filp->f_flags & O_NONBLOCK) { // O_NONBLOCK is a file status flag used in the Linux kernel and userspace programming to indicate non-blocking I/O.
                 return -EAGAIN;
             }
+			/*
+			if (state->mode == 0) { // Non-blocking mode
+                up(&state->lock);
+                return -EAGAIN;
+            }
+			*/
             debug("\"%s\" reading: going to sleep\n", current->comm); /* Name of the current process */
             if (wait_event_interruptible(sensor->wq, lunix_chrdev_state_needs_refresh(state))) {
-                return -ERESTARTSYS;
+                return -ERESTARTSYS; // The operation was interrupted by a signal.
             }
             if (down_interruptible(&state->lock)) {
                 return -ERESTARTSYS;
@@ -308,13 +321,13 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	/* Determine the number of cached bytes to copy to userspace */
 	/*---------------------------OUR CODE----------------------------------------*/
 
-	if (cnt > state->buf_lim - *f_pos) { // ! how does this calculation work?
+	if (cnt > state->buf_lim - *f_pos) {
         cnt = state->buf_lim - *f_pos;
     }
 
 	/* Copy data to user space */
-    if (copy_to_user(usrbuf, state->buf_data + *f_pos, cnt)) {  // ! what does this function do?
-        ret = -EFAULT; // ! error
+    if (copy_to_user(usrbuf, state->buf_data + *f_pos, cnt)) {  // ! When does the user read the usrbuf
+        ret = -EFAULT; // -EFAULT is a standard error code that stands for "Bad Address."
         goto out;
     }
 	debug("We read %zu bytes of data\n", cnt);
@@ -336,7 +349,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
 	/*---------------------------------------------------------------------------*/
 out:
 	/* Unlock */
-	up(&state->lock); // ! why?
+	up(&state->lock); 
 	return ret;
 }
 
@@ -370,7 +383,7 @@ int lunix_chrdev_init(void)
 	cdev_init(&lunix_chrdev_cdev, &lunix_chrdev_fops);
 	lunix_chrdev_cdev.owner = THIS_MODULE;
 	
-	dev_no = MKDEV(LUNIX_CHRDEV_MAJOR, 0);
+	dev_no = MKDEV(LUNIX_CHRDEV_MAJOR, 0); // Create a device number by combining the major and minor
 	/* register_chrdev_region? */
 
 	/*---------------------------OUR CODE----------------------------------------*/
