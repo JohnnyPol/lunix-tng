@@ -326,7 +326,7 @@ static ssize_t lunix_chrdev_read(struct file *filp, char __user *usrbuf, size_t 
     }
 
 	/* Copy data to user space */
-    if (copy_to_user(usrbuf, state->buf_data + *f_pos, cnt)) {  // ! When does the user read the usrbuf
+    if (copy_to_user(usrbuf, state->buf_data + *f_pos, cnt)) {  
         ret = -EFAULT; // -EFAULT is a standard error code that stands for "Bad Address."
         goto out;
     }
